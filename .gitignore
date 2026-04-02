@@ -1,0 +1,48 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+
+# Temporary files
+temp/
+*.tmp
+*.log
+
+# Uploads (only keep the directory structure)
+uploads/criminals/*/
+uploads/screenshots/
+!uploads/criminals/.gitkeep
+!uploads/screenshots/.gitkeep
+
+# Models
+python_service/models/
+!python_service/models/.gitkeep
+
+# Database dumps
+*.sql
+!criminal_detection_db.sql
