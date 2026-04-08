@@ -13,6 +13,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Verify CSRF token
     if (!isset($_POST['csrf_token']) || !verifyCSRFToken($_POST['csrf_token'])) {
         $error = 'Security token validation failed. Please try again.';
+    } else if (empty($_FILES['photos']['name'][0])) {
+        $error = 'ERROR: You must upload at least one photo (face image) when adding a criminal record!';
     } else {
         $db = getDB();
     
@@ -247,16 +249,41 @@ include __DIR__ . '/../../includes/header.php';
             <!-- Photos Upload -->
             <div class="col-lg-4">
                 <div class="card dark-card">
-                    <div class="card-header"><h5><i class="fas fa-camera me-2"></i>Photos (Face Images)</h5></div>
+                    <div class="card-header"><h5><i class="fas fa-camera me-2"></i>Photos (Face Images) *</h5></div>
                     <div class="card-body">
                         <div class="photo-upload-zone" id="photoDropZone">
                             <i class="fas fa-cloud-upload-alt fa-3x mb-3 text-info"></i>
                             <p>Drag & drop photos or click to browse</p>
                             <small class="text-muted">Upload multiple clear face photos for better detection accuracy</small>
-                            <input type="file" name="photos[]" id="photoInput" multiple accept="image/*" class="d-none">
+                            <input type="file" name="photos[]" id="photoInput" multiple accept="image/*" class="d-none" required>
                         </div>
                         <div id="photoPreview" class="mt-3 row g-2"></div>
+                        <div id="photoError" class="alert alert-danger mt-2" style="display:none;">
+                            <i class="fas fa-exclamation-circle me-1"></i>
+                            <strong>Required!</strong> You must upload at least one photo.
+                        </div>
                         
+                        <!-- Photo Required Modal Popup -->
+                        <div id="photoModal" class="modal fade" tabindex="-1" style="display:none;">
+                            <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content" style="background:#1a1a2e;border:2px solid #ff4444;">
+                                    <div class="modal-header" style="border-bottom:2px solid #ff4444;">
+                                        <h5 class="modal-title" style="color:#ff4444;">
+                                            <i class="fas fa-exclamation-triangle me-2"></i>PHOTOS REQUIRED
+                                        </h5>
+                                    </div>
+                                    <div class="modal-body" style="color:#fff;">
+                                        <p><strong>⚠️ You cannot add a criminal record without photos!</strong></p>
+                                        <p>You must upload at least one clear face photo before submitting the form.</p>
+                                    </div>
+                                    <div class="modal-footer" style="border-top:2px solid #ff4444;">
+                                        <button type="button" class="btn btn-danger" data-dismiss="modal">
+                                            Close
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         <div class="alert alert-info mt-3" style="background:rgba(0,212,255,0.1);border-color:rgba(0,212,255,0.3);color:#8de4ff;font-size:13px;">
                             <i class="fas fa-info-circle me-1"></i>
                             <strong>Tips:</strong><br>
@@ -281,6 +308,8 @@ include __DIR__ . '/../../includes/header.php';
 const dropZone = document.getElementById('photoDropZone');
 const photoInput = document.getElementById('photoInput');
 const preview = document.getElementById('photoPreview');
+const photoError = document.getElementById('photoError');
+const submitBtn = document.querySelector('button[type="submit"]');
 
 dropZone.onclick = () => photoInput.click();
 dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('dragover'); };
@@ -295,6 +324,14 @@ photoInput.onchange = showPreviews;
 
 function showPreviews() {
     preview.innerHTML = '';
+    if (photoInput.files.length === 0) {
+        photoError.style.display = 'block';
+        dropZone.style.opacity = '0.6';
+    } else {
+        photoError.style.display = 'none';
+        dropZone.style.opacity = '1';
+    }
+    
     Array.from(photoInput.files).forEach((file, i) => {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -310,6 +347,51 @@ function showPreviews() {
         reader.readAsDataURL(file);
     });
 }
+
+// Form submission validation
+document.querySelector('form').onsubmit = function(e) {
+    if (photoInput.files.length === 0) {
+        e.preventDefault();
+        // Show custom modal popup
+        const modal = document.getElementById('photoModal');
+        modal.style.display = 'block';
+        modal.classList.add('show');
+        document.body.classList.add('modal-open');
+        
+        // Create and append backdrop
+        let backdrop = document.querySelector('.modal-backdrop');
+        if (!backdrop) {
+            backdrop = document.createElement('div');
+            backdrop.className = 'modal-backdrop fade show';
+            document.body.appendChild(backdrop);
+        }
+        
+        photoError.style.display = 'block';
+        photoError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return false;
+    }
+    return true;
+};
+
+// Close modal functionality
+document.querySelectorAll('[data-dismiss="modal"]').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const modal = document.getElementById('photoModal');
+        modal.style.display = 'none';
+        modal.classList.remove('show');
+        document.body.classList.remove('modal-open');
+        const backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop) backdrop.remove();
+    });
+});
+
+// Initial check
+window.addEventListener('load', function() {
+    if (photoInput.files.length === 0) {
+        photoError.style.display = 'block';
+        dropZone.style.opacity = '0.6';
+    }
+});
 </script>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

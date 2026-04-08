@@ -4,7 +4,35 @@ require_once __DIR__ . '/../auth/middleware.php';
 $pageTitle = 'Criminal Records';
 
 $db = getDB();
-$criminals = $db->query("
+
+// Get filter values from URL parameters
+$dangerFilter = $_GET['danger'] ?? '';
+$statusFilter = $_GET['status'] ?? '';
+$encodingFilter = $_GET['encoding'] ?? '';
+
+// Build WHERE clause based on filters
+$where = "c.is_active = 1";
+$params = [];
+
+if ($dangerFilter) {
+    $where .= " AND c.danger_level = ?";
+    $params[] = $dangerFilter;
+}
+
+if ($statusFilter) {
+    $where .= " AND c.status = ?";
+    $params[] = $statusFilter;
+}
+
+if ($encodingFilter) {
+    if ($encodingFilter === 'encoded') {
+        $where .= " AND (SELECT COUNT(*) FROM face_encodings WHERE criminal_id = c.id) > 0";
+    } else if ($encodingFilter === 'not_encoded') {
+        $where .= " AND (SELECT COUNT(*) FROM face_encodings WHERE criminal_id = c.id) = 0";
+    }
+}
+
+$query = "
     SELECT c.*, 
            cp.photo_path,
            (SELECT COUNT(*) FROM criminal_photos WHERE criminal_id = c.id) as photo_count,
@@ -14,9 +42,13 @@ $criminals = $db->query("
     FROM criminals c
     LEFT JOIN criminal_photos cp ON c.id = cp.criminal_id AND cp.is_primary = 1
     LEFT JOIN users u ON c.added_by = u.id
-    WHERE c.is_active = 1
+    WHERE $where
     ORDER BY c.created_at DESC
-")->fetchAll();
+";
+
+$stmt = $db->prepare($query);
+$stmt->execute($params);
+$criminals = $stmt->fetchAll();
 
 include __DIR__ . '/../../includes/header.php';
 ?>
@@ -34,32 +66,39 @@ include __DIR__ . '/../../includes/header.php';
     <!-- Filter Bar -->
     <div class="card dark-card mb-4">
         <div class="card-body py-2">
-            <div class="row g-2 align-items-center">
+            <form method="GET" class="row g-2 align-items-center">
                 <div class="col-md-3">
-                    <select id="filterDanger" class="form-select form-select-sm dark-input">
+                    <select name="danger" class="form-select form-select-sm dark-input" onchange="this.form.submit()">
                         <option value="">All Danger Levels</option>
-                        <option value="critical">Critical</option>
-                        <option value="high">High</option>
-                        <option value="medium">Medium</option>
-                        <option value="low">Low</option>
+                        <option value="critical" <?= $dangerFilter === 'critical' ? 'selected' : '' ?>>Critical</option>
+                        <option value="high" <?= $dangerFilter === 'high' ? 'selected' : '' ?>>High</option>
+                        <option value="medium" <?= $dangerFilter === 'medium' ? 'selected' : '' ?>>Medium</option>
+                        <option value="low" <?= $dangerFilter === 'low' ? 'selected' : '' ?>>Low</option>
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <select id="filterStatus" class="form-select form-select-sm dark-input">
+                    <select name="status" class="form-select form-select-sm dark-input" onchange="this.form.submit()">
                         <option value="">All Statuses</option>
-                        <option value="wanted">Wanted</option>
-                        <option value="arrested">Arrested</option>
-                        <option value="released">Released</option>
+                        <option value="wanted" <?= $statusFilter === 'wanted' ? 'selected' : '' ?>>Wanted</option>
+                        <option value="arrested" <?= $statusFilter === 'arrested' ? 'selected' : '' ?>>Arrested</option>
+                        <option value="released" <?= $statusFilter === 'released' ? 'selected' : '' ?>>Released</option>
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <select id="filterEncoding" class="form-select form-select-sm dark-input">
+                    <select name="encoding" class="form-select form-select-sm dark-input" onchange="this.form.submit()">
                         <option value="">All</option>
-                        <option value="encoded">Face Encoded</option>
-                        <option value="not_encoded">Not Encoded</option>
+                        <option value="encoded" <?= $encodingFilter === 'encoded' ? 'selected' : '' ?>>Face Encoded</option>
+                        <option value="not_encoded" <?= $encodingFilter === 'not_encoded' ? 'selected' : '' ?>>Not Encoded</option>
                     </select>
                 </div>
-            </div>
+                <div class="col-md-3">
+                    <?php if ($dangerFilter || $statusFilter || $encodingFilter): ?>
+                        <a href="<?= BASE_URL ?>php/criminals/list.php" class="btn btn-outline-warning btn-sm w-100">
+                            <i class="fas fa-redo me-1"></i> Clear Filters
+                        </a>
+                    <?php endif; ?>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -136,23 +175,11 @@ include __DIR__ . '/../../includes/header.php';
 
 <script>
 $(document).ready(function() {
-    const table = $('#criminalsTable').DataTable({
+    // Initialize DataTable
+    $('#criminalsTable').DataTable({
         pageLength: 25,
         order: [[1, 'desc']],
         language: { search: '', searchPlaceholder: 'Search criminals...' }
-    });
-
-    // Custom filters
-    ['filterDanger', 'filterStatus', 'filterEncoding'].forEach(id => {
-        document.getElementById(id).addEventListener('change', function() {
-            const attr = id.replace('filter', '').toLowerCase();
-            const val = this.value;
-            table.rows().every(function() {
-                const row = this.node();
-                const match = !val || row.dataset[attr === 'encoding' ? 'encoding' : attr] === val;
-                row.style.display = match ? '' : 'none';
-            });
-        });
     });
 });
 
